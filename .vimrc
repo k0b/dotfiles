@@ -29,6 +29,7 @@ Plugin 'peaksea'
 Plugin 'amix/open_file_under_cursor.vim'
 Plugin 'bling/vim-airline'
 Plugin 'chriskempson/vim-tomorrow-theme'
+Plugin 'vim-airline/vim-airline-themes'
 Plugin 'YankRing.vim'
 Plugin 'fatih/vim-go'
 
