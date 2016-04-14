@@ -1,3 +1,7 @@
+# Go
+export PATH=$PATH:/usr/local/go/bin
+export GOPATH=/Users/james/Dropbox/James/Current/Code/Go/GOPATH/default
+
 # ShellOpts
 set -o vi
 
