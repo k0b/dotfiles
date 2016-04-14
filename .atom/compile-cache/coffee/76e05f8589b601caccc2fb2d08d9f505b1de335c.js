@@ -1,0 +1,523 @@
+(function() {
+  var $, $$, CompositeDisposable, Finder, ToolbarView, View, fs, subAtom, _, _ref,
+    __hasProp = {}.hasOwnProperty,
+    __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; };
+
+  CompositeDisposable = require('atom').CompositeDisposable;
+
+  _ref = require('atom-space-pen-views'), $ = _ref.$, $$ = _ref.$$, View = _ref.View;
+
+  fs = require('fs');
+
+  _ = require('underscore-plus');
+
+  Finder = require('./finder');
+
+  subAtom = require('sub-atom');
+
+  module.exports = ToolbarView = (function(_super) {
+    __extends(ToolbarView, _super);
+
+    function ToolbarView() {
+      return ToolbarView.__super__.constructor.apply(this, arguments);
+    }
+
+    ToolbarView.content = function() {
+      return this.div({
+        "class": 'command-toolbar toolbar-horiz'
+      }, (function(_this) {
+        return function() {
+          return _this.div({
+            outlet: 'newBtn',
+            "class": 'new-btn command-toolbar-btn'
+          });
+        };
+      })(this));
+    };
+
+    ToolbarView.prototype.initialize = function(commandToolbar, state) {
+      var btn, closeTtEvents, _base, _i, _len, _ref1;
+      this.state = state;
+      this.subs = new subAtom;
+      this.$workspace = $(atom.views.getView(atom.workspace));
+      this.updateSide(null, true);
+      closeTtEvents = 'mousedown mouseout mouseleave';
+      this.subs.add(this, 'mouseover', '.command-toolbar-btn', (function(_this) {
+        return function(e) {
+          return _this.chkTooltip(e);
+        };
+      })(this));
+      this.subs.add(this, closeTtEvents, '.command-toolbar-btn', (function(_this) {
+        return function() {
+          return _this.closeTooltip();
+        };
+      })(this));
+      _ref1 = ((_base = this.state).buttons != null ? _base.buttons : _base.buttons = []);
+      for (_i = 0, _len = _ref1.length; _i < _len; _i++) {
+        btn = _ref1[_i];
+        this.addBtn.apply(this, btn);
+      }
+      this.subs.add(this.newBtn, 'click', (function(_this) {
+        return function(e) {
+          if (e.ctrlKey || e.altKey) {
+            _this.addTabBtn();
+          } else {
+            new Finder().show(function(name) {
+              return _this.addBtn(name, name, true);
+            });
+          }
+          return false;
+        };
+      })(this));
+      return this.setupBtnEvents();
+    };
+
+    ToolbarView.prototype.saveState = function() {
+      var e;
+      try {
+        return fs.writeFileSync(this.state.statePath, JSON.stringify(this.state));
+      } catch (_error) {
+        e = _error;
+        return console.log('command-toolbar error saving state file:', e.message);
+      }
+    };
+
+    ToolbarView.prototype.chkTooltip = function(e) {
+      var $btn, hgt, newBtn, now, ofs, style, text, wid, winX, winY, workspaceEle;
+      now = Date.now();
+      if (this.tooltipHoverMS == null) {
+        this.tooltipHoverMS = now;
+      }
+      if (now < this.tooltipHoverMS + 1000) {
+        this.tooltipTimeout = setTimeout(((function(_this) {
+          return function() {
+            return _this.chkTooltip(e);
+          };
+        })(this)), 50);
+        return;
+      }
+      this.closeTooltip();
+      ofs = ($btn = $(e.target)).offset();
+      newBtn = $btn.is(':first-child');
+      wid = $btn.width() + (newBtn ? 10 : 0);
+      hgt = $btn.height();
+      workspaceEle = atom.views.getView(atom.workspace);
+      winX = workspaceEle.offsetWidth;
+      winY = workspaceEle.offsetHeight;
+      text = newBtn ? 'Create Button Or Drag Toolbar<br>' + 'Ctrl-Click To Add Current Tab' : $btn.attr('data-cmd');
+      style = (function() {
+        switch (this.state.side) {
+          case 'top':
+            return "left:  " + ofs.left + "px;        top:    " + (ofs.top + hgt + 15) + "px";
+          case 'right':
+            return "right: " + (winX - ofs.left + 5) + "px; top:    " + (ofs.top - 3) + "px";
+          case 'bottom':
+            return "left:  " + ofs.left + "px;        bottom: " + (winY - ofs.top + 5) + "px";
+          case 'left':
+            return "left:  " + (ofs.left + wid + 15) + "px; top:    " + (ofs.top - 3) + "px";
+        }
+      }).call(this);
+      this.$tooltip = $("<div class='command-toolbar-tooltip' style='" + style + "'>" + text + "</div>");
+      this.$workspace.append(this.$tooltip);
+      this.tooltipCloseTimeout = setTimeout(((function(_this) {
+        return function() {
+          return _this.closeTooltip();
+        };
+      })(this)), (newBtn ? 4000 : 2000));
+      return false;
+    };
+
+    ToolbarView.prototype.closeTooltip = function() {
+      if (this.tooltipTimeout) {
+        clearTimeout(this.tooltipTimeout);
+      }
+      if (this.tooltipCloseTimeout) {
+        clearTimeout(this.tooltipCloseTimeout);
+      }
+      this.tooltipTimeout = this.tooltipCloseTimeout = this.tooltipHoverMS = null;
+      if (this.$tooltip) {
+        this.$tooltip.remove();
+        return this.$tooltip = null;
+      }
+    };
+
+    ToolbarView.prototype.updateSide = function(side, refresh) {
+      var lftRight, topBottom, _base;
+      this.stopEditing();
+      if (!side && !refresh) {
+        return;
+      }
+      if (!refresh && side === this.state.side) {
+        return;
+      }
+      if (side) {
+        this.state.side = side;
+      }
+      if ((_base = this.state).side == null) {
+        _base.side = 'top';
+      }
+      this.saveState();
+      lftRight = (function(_this) {
+        return function() {
+          _this.removeClass('toolbar-vert').addClass('toolbar-horiz');
+          return _this.find('.btn').css({
+            display: 'inline-block'
+          });
+        };
+      })(this);
+      topBottom = (function(_this) {
+        return function() {
+          _this.removeClass('toolbar-horiz').addClass('toolbar-vert');
+          return _this.find('.btn').css({
+            display: 'block'
+          });
+        };
+      })(this);
+      this.detach();
+      switch (this.state.side) {
+        case 'left':
+          topBottom();
+          return atom.workspace.addLeftPanel({
+            item: this
+          });
+        case 'right':
+          topBottom();
+          return atom.workspace.addRightPanel({
+            item: this
+          });
+        case 'bottom':
+          lftRight();
+          return atom.workspace.addBottomPanel({
+            item: this
+          });
+        default:
+          lftRight();
+          return atom.workspace.addTopPanel({
+            item: this
+          });
+      }
+    };
+
+    ToolbarView.prototype.get$Btn = function(e) {
+      return $(e.target).closest('.btn');
+    };
+
+    ToolbarView.prototype.addBtn = function(label, cmd, newBtn) {
+      var newBtnView, oldLabel;
+      this.stopEditing();
+      if (newBtn) {
+        oldLabel = null;
+        this.find('.btn').each(function() {
+          var $btn;
+          $btn = $(this);
+          if ($btn.attr('data-cmd') === cmd) {
+            oldLabel = $btn.text();
+            atom.confirm({
+              message: 'command-toolbar Error:\n',
+              detailedMessage: 'The command "' + cmd + '" ' + 'already exists with label "' + oldLabel + '".',
+              buttons: ['OK']
+            });
+            return false;
+          }
+        });
+        if (oldLabel != null) {
+          return;
+        }
+      }
+      newBtnView = $$(function() {
+        return this.div({
+          "class": 'btn native-key-bindings command-toolbar-btn'
+        }, label);
+      });
+      if (newBtn) {
+        this.newBtn.after(newBtnView);
+      } else {
+        this.append(newBtnView);
+      }
+      this.updateSide(null, true);
+      newBtnView.attr('data-cmd', cmd);
+      if (newBtn) {
+        this.state.buttons.unshift([label, cmd]);
+        return this.saveState();
+      }
+    };
+
+    ToolbarView.prototype.addTabBtn = function() {
+      var cmd, editor, _ref1;
+      if ((cmd = editor = (_ref1 = atom.workspace.getActivePaneItem()) != null ? typeof _ref1.getPath === "function" ? _ref1.getPath() : void 0 : void 0)) {
+        if (!/^https?:\/\//i.test(cmd)) {
+          cmd = 'file://' + cmd;
+        }
+        return this.addBtn(cmd, cmd, true);
+      }
+    };
+
+    ToolbarView.prototype.startEditing = function(e) {
+      var $btn;
+      if (this.buttonEditing && this.buttonEditing[0] === e.target) {
+        return;
+      }
+      this.stopDragging();
+      this.stopEditing();
+      $btn = this.get$Btn(e);
+      $btn.attr({
+        contenteditable: true
+      });
+      $btn.css({
+        cursor: 'text'
+      });
+      return this.buttonEditing = $btn;
+    };
+
+    ToolbarView.prototype.stopEditing = function() {
+      if (!this.buttonEditing) {
+        return;
+      }
+      this.buttonEditing.css({
+        cursor: 'pointer'
+      });
+      this.buttonEditing.attr({
+        contenteditable: false
+      });
+      this.state.buttons[this.buttonEditing.index() - 1][0] = this.buttonEditing.text();
+      this.saveState();
+      return this.buttonEditing = null;
+    };
+
+    ToolbarView.prototype.executeCmd = function(e) {
+      var ele, name, options, _ref1;
+      if (this.buttonEditing && this.buttonEditing[0] !== e.target) {
+        this.stopEditing();
+      }
+      name = this.get$Btn(e).attr('data-cmd');
+      if (/^(https?|file):\/\//i.test(name)) {
+        options = (atom.config.get('command-toolbar.useRightPane') ? {
+          split: 'right'
+        } : {});
+        return atom.workspace.open(name.replace(/^file:\/\//, ''), options);
+      } else {
+        ele = (_ref1 = atom.workspace.getActivePaneItem()) != null ? _ref1 : atom.workspace;
+        return atom.commands.dispatch(atom.views.getView(ele), name);
+      }
+    };
+
+    ToolbarView.prototype.btnClick = function(e) {
+      var _ref1;
+      if (e.ctrlKey || e.altKey) {
+        this.startEditing(e);
+        return;
+      }
+      if (e.target === ((_ref1 = this.buttonEditing) != null ? _ref1[0] : void 0)) {
+        return;
+      }
+      return this.executeCmd(e);
+    };
+
+    ToolbarView.prototype.btnKeyDown = function(e) {
+      var _ref1;
+      if ((_ref1 = e.which) === 9 || _ref1 === 13) {
+        this.stopEditing();
+        return false;
+      }
+    };
+
+    ToolbarView.prototype.startDraggingToolbar = function(e) {
+      this.initMouseX = e.pageX;
+      this.initMouseY = e.pageY;
+      this.draggingToolbar = true;
+      return this.newBtn.addClass('dragging');
+    };
+
+    ToolbarView.prototype.setToolbarPos = function(e) {
+      var distSq, distX, distY, gridH, gridW, inMiddleCol, inMiddleRow, side, _ref1, _ref2;
+      distX = e.pageX - this.initMouseX;
+      distY = e.pageY - this.initMouseY;
+      distSq = distX * distX + distY * distY;
+      gridW = this.$workspace.width() / 3;
+      gridH = this.$workspace.height() / 3;
+      inMiddleCol = (gridW < (_ref1 = e.pageX) && _ref1 < gridW * 2);
+      inMiddleRow = (gridH < (_ref2 = e.pageY) && _ref2 < gridH * 2);
+      side = (function() {
+        switch (false) {
+          case !(distSq < 3600):
+            return this.state.side;
+          case !(inMiddleCol && e.pageY < gridH):
+            return 'top';
+          case !(inMiddleRow && e.pageX > gridW * 2):
+            return 'right';
+          case !(inMiddleCol && e.pageY > gridH * 2):
+            return 'bottom';
+          case !(inMiddleRow && e.pageX < gridW):
+            return 'left';
+        }
+      }).call(this);
+      return this.updateSide(side);
+    };
+
+    ToolbarView.prototype.startDragging = function(e) {
+      var $btn;
+      $btn = this.get$Btn(e);
+      this.initMouseX = e.pageX;
+      this.initMouseY = e.pageY;
+      this.draggingBtn = $btn;
+      this.draggingOrigIdx = $btn.index() - 1;
+      return this.draggingBtn.addClass('dragging');
+    };
+
+    ToolbarView.prototype.stopDragging = function(del) {
+      this.draggingToolbar = false;
+      this.newBtn.removeClass('dragging');
+      if (!this.draggingBtn) {
+        return;
+      }
+      if (del) {
+        this.state.buttons.splice(this.draggingBtn.index() - 1, 1);
+        this.draggingBtn.remove();
+        this.saveState();
+      } else {
+        this.draggingBtn.removeClass('dragging');
+      }
+      this.draggingBtn = null;
+      return false;
+    };
+
+    ToolbarView.prototype.newBtnMouseDown = function(e) {
+      if (this.buttonEditing) {
+        this.stopEditing();
+      }
+      this.startDraggingToolbar(e);
+      return false;
+    };
+
+    ToolbarView.prototype.btnMousedown = function(e) {
+      if (this.buttonEditing || e.ctrlKey) {
+        return;
+      }
+      if (this.buttonEditing) {
+        return;
+      }
+      this.startDragging(e);
+      return false;
+    };
+
+    ToolbarView.prototype.chkDelete = function(init, initOrth, pos, posOrth) {
+      if (!((initOrth - 60 < posOrth && posOrth < initOrth + 60))) {
+        this.stopDragging(true);
+        return true;
+      }
+    };
+
+    ToolbarView.prototype.chkRearrange = function(init, initOrth, pos, posOrth) {
+      var $btns, buttons, curIdx, dist, dstIdx, newIdx, numBtns, ofs, srcIdx, _ref1;
+      ofs = pos - init;
+      dist = Math.floor(Math.abs(ofs) / ((_ref1 = this.state.side) === 'left' || _ref1 === 'right' ? 5 : 20));
+      if (dist & 1) {
+        return;
+      }
+      dist /= 2;
+      numBtns = this.state.buttons.length;
+      newIdx = this.draggingOrigIdx + (ofs < 0 ? -dist : dist);
+      newIdx = Math.max(0, Math.min(numBtns - 1, newIdx));
+      curIdx = this.draggingBtn.index() - 1;
+      if (newIdx === curIdx) {
+        return;
+      }
+      $btns = this.find('.btn').remove();
+      srcIdx = dstIdx = 0;
+      while (dstIdx < numBtns) {
+        switch (false) {
+          case dstIdx !== newIdx:
+            this.append($btns.eq(curIdx));
+            dstIdx++;
+            break;
+          case srcIdx === curIdx:
+            this.append($btns.eq(srcIdx++));
+            dstIdx++;
+            break;
+          default:
+            srcIdx++;
+        }
+      }
+      buttons = this.state.buttons = [];
+      this.find('.btn').each(function() {
+        var $btn;
+        $btn = $(this);
+        return buttons.push([$btn.text(), $btn.attr('data-cmd')]);
+      });
+      return this.saveState();
+    };
+
+    ToolbarView.prototype.mousemove = function(e) {
+      var posArr, _ref1;
+      if (!this.draggingBtn && !this.draggingToolbar) {
+        return;
+      }
+      if (this.buttonEditing || (e.which & 1) === 0) {
+        this.stopDragging();
+        return;
+      }
+      if (this.draggingToolbar) {
+        this.setToolbarPos(e);
+      } else {
+        posArr = ((_ref1 = this.state.side) === 'top' || _ref1 === 'bottom' ? [this.initMouseX, this.initMouseY, e.pageX, e.pageY] : [this.initMouseY, this.initMouseX, e.pageY, e.pageX]);
+        if (!this.chkDelete.apply(this, posArr)) {
+          this.chkRearrange.apply(this, posArr);
+        }
+      }
+      return false;
+    };
+
+    ToolbarView.prototype.setupBtnEvents = function() {
+      var $body;
+      $body = $('body');
+      this.subs.add($body, '[contenteditable]', (function(_this) {
+        return function() {
+          return _this.stopEditing();
+        };
+      })(this));
+      this.subs.add($body, 'mouseup', (function(_this) {
+        return function() {
+          return _this.stopDragging();
+        };
+      })(this));
+      this.subs.add($body, 'mousemove', (function(_this) {
+        return function(e) {
+          return _this.mousemove(e);
+        };
+      })(this));
+      this.subs.add(this, 'mousedown', '.new-btn', (function(_this) {
+        return function(e) {
+          return _this.newBtnMouseDown(e);
+        };
+      })(this));
+      this.subs.add(this, 'mousedown', '.btn', (function(_this) {
+        return function(e) {
+          return _this.btnMousedown(e);
+        };
+      })(this));
+      this.subs.add(this, 'keydown', '.btn', (function(_this) {
+        return function(e) {
+          return _this.btnKeyDown(e);
+        };
+      })(this));
+      return this.subs.add(this, 'click', '.btn', (function(_this) {
+        return function(e) {
+          return _this.btnClick(e);
+        };
+      })(this));
+    };
+
+    ToolbarView.prototype.destroy = function() {
+      this.subs.dispose();
+      return this.detach();
+    };
+
+    return ToolbarView;
+
+  })(View);
+
+}).call(this);
+
+//# sourceMappingURL=data:application/json;base64,ewogICJ2ZXJzaW9uIjogMywKICAiZmlsZSI6ICIiLAogICJzb3VyY2VSb290IjogIiIsCiAgInNvdXJjZXMiOiBbCiAgICAiL1VzZXJzL2phbWVzLy5hdG9tL3BhY2thZ2VzL2NvbW1hbmQtdG9vbGJhci9saWIvdG9vbGJhci12aWV3LmNvZmZlZSIKICBdLAogICJuYW1lcyI6IFtdLAogICJtYXBwaW5ncyI6ICJBQUdBO0FBQUEsTUFBQSwyRUFBQTtJQUFBO21TQUFBOztBQUFBLEVBQUMsc0JBQXVCLE9BQUEsQ0FBUSxNQUFSLEVBQXZCLG1CQUFELENBQUE7O0FBQUEsRUFDQSxPQUFpQixPQUFBLENBQVEsc0JBQVIsQ0FBakIsRUFBQyxTQUFBLENBQUQsRUFBSSxVQUFBLEVBQUosRUFBUSxZQUFBLElBRFIsQ0FBQTs7QUFBQSxFQUVBLEVBQUEsR0FBaUIsT0FBQSxDQUFRLElBQVIsQ0FGakIsQ0FBQTs7QUFBQSxFQUdBLENBQUEsR0FBaUIsT0FBQSxDQUFRLGlCQUFSLENBSGpCLENBQUE7O0FBQUEsRUFJQSxNQUFBLEdBQWlCLE9BQUEsQ0FBUSxVQUFSLENBSmpCLENBQUE7O0FBQUEsRUFLQSxPQUFBLEdBQWlCLE9BQUEsQ0FBUSxVQUFSLENBTGpCLENBQUE7O0FBQUEsRUFPQSxNQUFNLENBQUMsT0FBUCxHQUNNO0FBRUosa0NBQUEsQ0FBQTs7OztLQUFBOztBQUFBLElBQUEsV0FBQyxDQUFBLE9BQUQsR0FBVSxTQUFBLEdBQUE7YUFDUixJQUFDLENBQUEsR0FBRCxDQUFLO0FBQUEsUUFBQSxPQUFBLEVBQU0sK0JBQU47T0FBTCxFQUE0QyxDQUFBLFNBQUEsS0FBQSxHQUFBO2VBQUEsU0FBQSxHQUFBO2lCQUMxQyxLQUFDLENBQUEsR0FBRCxDQUFLO0FBQUEsWUFBQSxNQUFBLEVBQU8sUUFBUDtBQUFBLFlBQWlCLE9BQUEsRUFBTSw2QkFBdkI7V0FBTCxFQUQwQztRQUFBLEVBQUE7TUFBQSxDQUFBLENBQUEsQ0FBQSxJQUFBLENBQTVDLEVBRFE7SUFBQSxDQUFWLENBQUE7O0FBQUEsMEJBSUEsVUFBQSxHQUFZLFNBQUMsY0FBRCxFQUFrQixLQUFsQixHQUFBO0FBQ1YsVUFBQSwwQ0FBQTtBQUFBLE1BRDJCLElBQUMsQ0FBQSxRQUFBLEtBQzVCLENBQUE7QUFBQSxNQUFBLElBQUMsQ0FBQSxJQUFELEdBQVEsR0FBQSxDQUFBLE9BQVIsQ0FBQTtBQUFBLE1BQ0EsSUFBQyxDQUFBLFVBQUQsR0FBYyxDQUFBLENBQUUsSUFBSSxDQUFDLEtBQUssQ0FBQyxPQUFYLENBQW1CLElBQUksQ0FBQyxTQUF4QixDQUFGLENBRGQsQ0FBQTtBQUFBLE1BRUEsSUFBQyxDQUFBLFVBQUQsQ0FBWSxJQUFaLEVBQWtCLElBQWxCLENBRkEsQ0FBQTtBQUFBLE1BSUEsYUFBQSxHQUFnQiwrQkFKaEIsQ0FBQTtBQUFBLE1BS0EsSUFBQyxDQUFBLElBQUksQ0FBQyxHQUFOLENBQVUsSUFBVixFQUFhLFdBQWIsRUFBNEIsc0JBQTVCLEVBQW9ELENBQUEsU0FBQSxLQUFBLEdBQUE7ZUFBQSxTQUFDLENBQUQsR0FBQTtpQkFBTyxLQUFDLENBQUEsVUFBRCxDQUFZLENBQVosRUFBUDtRQUFBLEVBQUE7TUFBQSxDQUFBLENBQUEsQ0FBQSxJQUFBLENBQXBELENBTEEsQ0FBQTtBQUFBLE1BTUEsSUFBQyxDQUFBLElBQUksQ0FBQyxHQUFOLENBQVUsSUFBVixFQUFhLGFBQWIsRUFBNEIsc0JBQTVCLEVBQXdELENBQUEsU0FBQSxLQUFBLEdBQUE7ZUFBQSxTQUFBLEdBQUE7aUJBQUcsS0FBQyxDQUFBLFlBQUQsQ0FBQSxFQUFIO1FBQUEsRUFBQTtNQUFBLENBQUEsQ0FBQSxDQUFBLElBQUEsQ0FBeEQsQ0FOQSxDQUFBO0FBT0E7QUFBQSxXQUFBLDRDQUFBO3dCQUFBO0FBQXVDLFFBQUEsSUFBQyxDQUFBLE1BQUQsYUFBUSxHQUFSLENBQUEsQ0FBdkM7QUFBQSxPQVBBO0FBQUEsTUFRQSxJQUFDLENBQUEsSUFBSSxDQUFDLEdBQU4sQ0FBVSxJQUFDLENBQUEsTUFBWCxFQUFtQixPQUFuQixFQUE0QixDQUFBLFNBQUEsS0FBQSxHQUFBO2VBQUEsU0FBQyxDQUFELEdBQUE7QUFDMUIsVUFBQSxJQUFHLENBQUMsQ0FBQyxPQUFGLElBQWEsQ0FBQyxDQUFDLE1BQWxCO0FBQ0UsWUFBQSxLQUFDLENBQUEsU0FBRCxDQUFBLENBQUEsQ0FERjtXQUFBLE1BQUE7QUFHRSxZQUFJLElBQUEsTUFBQSxDQUFBLENBQVEsQ0FBQyxJQUFULENBQWMsU0FBQyxJQUFELEdBQUE7cUJBQVUsS0FBQyxDQUFBLE1BQUQsQ0FBUSxJQUFSLEVBQWMsSUFBZCxFQUFvQixJQUFwQixFQUFWO1lBQUEsQ0FBZCxDQUFKLENBSEY7V0FBQTtpQkFJQSxNQUwwQjtRQUFBLEVBQUE7TUFBQSxDQUFBLENBQUEsQ0FBQSxJQUFBLENBQTVCLENBUkEsQ0FBQTthQWNBLElBQUMsQ0FBQSxjQUFELENBQUEsRUFmVTtJQUFBLENBSlosQ0FBQTs7QUFBQSwwQkFxQkEsU0FBQSxHQUFXLFNBQUEsR0FBQTtBQUVULFVBQUEsQ0FBQTtBQUFBO2VBQ0UsRUFBRSxDQUFDLGFBQUgsQ0FBaUIsSUFBQyxDQUFBLEtBQUssQ0FBQyxTQUF4QixFQUFtQyxJQUFJLENBQUMsU0FBTCxDQUFlLElBQUMsQ0FBQSxLQUFoQixDQUFuQyxFQURGO09BQUEsY0FBQTtBQUdFLFFBREksVUFDSixDQUFBO2VBQUEsT0FBTyxDQUFDLEdBQVIsQ0FBWSwwQ0FBWixFQUF3RCxDQUFDLENBQUMsT0FBMUQsRUFIRjtPQUZTO0lBQUEsQ0FyQlgsQ0FBQTs7QUFBQSwwQkE0QkEsVUFBQSxHQUFZLFNBQUMsQ0FBRCxHQUFBO0FBQ1YsVUFBQSx1RUFBQTtBQUFBLE1BQUEsR0FBQSxHQUFNLElBQUksQ0FBQyxHQUFMLENBQUEsQ0FBTixDQUFBOztRQUNBLElBQUMsQ0FBQSxpQkFBa0I7T0FEbkI7QUFFQSxNQUFBLElBQUcsR0FBQSxHQUFNLElBQUMsQ0FBQSxjQUFELEdBQWtCLElBQTNCO0FBQ0UsUUFBQSxJQUFDLENBQUEsY0FBRCxHQUFrQixVQUFBLENBQVcsQ0FBQyxDQUFBLFNBQUEsS0FBQSxHQUFBO2lCQUFBLFNBQUEsR0FBQTttQkFBRyxLQUFDLENBQUEsVUFBRCxDQUFZLENBQVosRUFBSDtVQUFBLEVBQUE7UUFBQSxDQUFBLENBQUEsQ0FBQSxJQUFBLENBQUQsQ0FBWCxFQUErQixFQUEvQixDQUFsQixDQUFBO0FBQ0EsY0FBQSxDQUZGO09BRkE7QUFBQSxNQUtBLElBQUMsQ0FBQSxZQUFELENBQUEsQ0FMQSxDQUFBO0FBQUEsTUFNQSxHQUFBLEdBQVMsQ0FBQyxJQUFBLEdBQU8sQ0FBQSxDQUFFLENBQUMsQ0FBQyxNQUFKLENBQVIsQ0FBb0IsQ0FBQyxNQUFyQixDQUFBLENBTlQsQ0FBQTtBQUFBLE1BT0EsTUFBQSxHQUFVLElBQUksQ0FBQyxFQUFMLENBQVEsY0FBUixDQVBWLENBQUE7QUFBQSxNQVFBLEdBQUEsR0FBUyxJQUFJLENBQUMsS0FBTCxDQUFBLENBQUEsR0FBZSxDQUFJLE1BQUgsR0FBZSxFQUFmLEdBQXVCLENBQXhCLENBUnhCLENBQUE7QUFBQSxNQVNBLEdBQUEsR0FBUyxJQUFJLENBQUMsTUFBTCxDQUFBLENBVFQsQ0FBQTtBQUFBLE1BVUEsWUFBQSxHQUFlLElBQUksQ0FBQyxLQUFLLENBQUMsT0FBWCxDQUFtQixJQUFJLENBQUMsU0FBeEIsQ0FWZixDQUFBO0FBQUEsTUFXQSxJQUFBLEdBQVMsWUFBWSxDQUFDLFdBWHRCLENBQUE7QUFBQSxNQVlBLElBQUEsR0FBUyxZQUFZLENBQUMsWUFadEIsQ0FBQTtBQUFBLE1BYUEsSUFBQSxHQUFZLE1BQUgsR0FBZSxtQ0FBQSxHQUNBLCtCQURmLEdBRWUsSUFBSSxDQUFDLElBQUwsQ0FBVSxVQUFWLENBZnhCLENBQUE7QUFBQSxNQWdCQSxLQUFBO0FBQVEsZ0JBQU8sSUFBQyxDQUFBLEtBQUssQ0FBQyxJQUFkO0FBQUEsZUFDRCxLQURDO21CQUNjLFNBQUEsR0FBUyxHQUFHLENBQUMsSUFBYixHQUFrQixxQkFBbEIsR0FBc0MsQ0FBQyxHQUFHLENBQUMsR0FBSixHQUFRLEdBQVIsR0FBWSxFQUFiLENBQXRDLEdBQXNELEtBRHBFO0FBQUEsZUFFRCxPQUZDO21CQUVjLFNBQUEsR0FBUSxDQUFDLElBQUEsR0FBSyxHQUFHLENBQUMsSUFBVCxHQUFjLENBQWYsQ0FBUixHQUF5QixjQUF6QixHQUFzQyxDQUFDLEdBQUcsQ0FBQyxHQUFKLEdBQVEsQ0FBVCxDQUF0QyxHQUFpRCxLQUYvRDtBQUFBLGVBR0QsUUFIQzttQkFHYyxTQUFBLEdBQVMsR0FBRyxDQUFDLElBQWIsR0FBa0IscUJBQWxCLEdBQXNDLENBQUMsSUFBQSxHQUFLLEdBQUcsQ0FBQyxHQUFULEdBQWEsQ0FBZCxDQUF0QyxHQUFzRCxLQUhwRTtBQUFBLGVBSUQsTUFKQzttQkFJYyxTQUFBLEdBQVEsQ0FBQyxHQUFHLENBQUMsSUFBSixHQUFTLEdBQVQsR0FBYSxFQUFkLENBQVIsR0FBeUIsY0FBekIsR0FBc0MsQ0FBQyxHQUFHLENBQUMsR0FBSixHQUFRLENBQVQsQ0FBdEMsR0FBaUQsS0FKL0Q7QUFBQTttQkFoQlIsQ0FBQTtBQUFBLE1BcUJBLElBQUMsQ0FBQSxRQUFELEdBQVksQ0FBQSxDQUFHLDhDQUFBLEdBQThDLEtBQTlDLEdBQW9ELElBQXBELEdBQXdELElBQXhELEdBQTZELFFBQWhFLENBckJaLENBQUE7QUFBQSxNQXNCQSxJQUFDLENBQUEsVUFBVSxDQUFDLE1BQVosQ0FBbUIsSUFBQyxDQUFBLFFBQXBCLENBdEJBLENBQUE7QUFBQSxNQXVCQSxJQUFDLENBQUEsbUJBQUQsR0FBdUIsVUFBQSxDQUFXLENBQUMsQ0FBQSxTQUFBLEtBQUEsR0FBQTtlQUFBLFNBQUEsR0FBQTtpQkFBRyxLQUFDLENBQUEsWUFBRCxDQUFBLEVBQUg7UUFBQSxFQUFBO01BQUEsQ0FBQSxDQUFBLENBQUEsSUFBQSxDQUFELENBQVgsRUFDYSxDQUFJLE1BQUgsR0FBZSxJQUFmLEdBQXlCLElBQTFCLENBRGIsQ0F2QnZCLENBQUE7QUF5QkEsYUFBTyxLQUFQLENBMUJVO0lBQUEsQ0E1QlosQ0FBQTs7QUFBQSwwQkF3REEsWUFBQSxHQUFjLFNBQUEsR0FBQTtBQUNaLE1BQUEsSUFBRyxJQUFDLENBQUEsY0FBSjtBQUE2QixRQUFBLFlBQUEsQ0FBYSxJQUFDLENBQUEsY0FBZCxDQUFBLENBQTdCO09BQUE7QUFDQSxNQUFBLElBQUcsSUFBQyxDQUFBLG1CQUFKO0FBQTZCLFFBQUEsWUFBQSxDQUFhLElBQUMsQ0FBQSxtQkFBZCxDQUFBLENBQTdCO09BREE7QUFBQSxNQUVBLElBQUMsQ0FBQSxjQUFELEdBQWtCLElBQUMsQ0FBQSxtQkFBRCxHQUF1QixJQUFDLENBQUEsY0FBRCxHQUFrQixJQUYzRCxDQUFBO0FBR0EsTUFBQSxJQUFHLElBQUMsQ0FBQSxRQUFKO0FBQ0UsUUFBQSxJQUFDLENBQUEsUUFBUSxDQUFDLE1BQVYsQ0FBQSxDQUFBLENBQUE7ZUFDQSxJQUFDLENBQUEsUUFBRCxHQUFZLEtBRmQ7T0FKWTtJQUFBLENBeERkLENBQUE7O0FBQUEsMEJBZ0VBLFVBQUEsR0FBWSxTQUFDLElBQUQsRUFBTyxPQUFQLEdBQUE7QUFDVixVQUFBLDBCQUFBO0FBQUEsTUFBQSxJQUFDLENBQUEsV0FBRCxDQUFBLENBQUEsQ0FBQTtBQUNBLE1BQUEsSUFBRyxDQUFBLElBQUEsSUFBYSxDQUFBLE9BQWhCO0FBQWlDLGNBQUEsQ0FBakM7T0FEQTtBQUVBLE1BQUEsSUFBRyxDQUFBLE9BQUEsSUFBZ0IsSUFBQSxLQUFRLElBQUMsQ0FBQSxLQUFLLENBQUMsSUFBbEM7QUFBNEMsY0FBQSxDQUE1QztPQUZBO0FBR0EsTUFBQSxJQUFHLElBQUg7QUFBYSxRQUFBLElBQUMsQ0FBQSxLQUFLLENBQUMsSUFBUCxHQUFjLElBQWQsQ0FBYjtPQUhBOzthQUlNLENBQUMsT0FBUTtPQUpmO0FBQUEsTUFLQSxJQUFDLENBQUEsU0FBRCxDQUFBLENBTEEsQ0FBQTtBQUFBLE1BTUEsUUFBQSxHQUFXLENBQUEsU0FBQSxLQUFBLEdBQUE7ZUFBQSxTQUFBLEdBQUE7QUFDVCxVQUFBLEtBQUMsQ0FBQSxXQUFELENBQWEsY0FBYixDQUE0QixDQUFDLFFBQTdCLENBQXNDLGVBQXRDLENBQUEsQ0FBQTtpQkFDQSxLQUFDLENBQUEsSUFBRCxDQUFNLE1BQU4sQ0FBYSxDQUFDLEdBQWQsQ0FBa0I7QUFBQSxZQUFBLE9BQUEsRUFBUyxjQUFUO1dBQWxCLEVBRlM7UUFBQSxFQUFBO01BQUEsQ0FBQSxDQUFBLENBQUEsSUFBQSxDQU5YLENBQUE7QUFBQSxNQVNBLFNBQUEsR0FBWSxDQUFBLFNBQUEsS0FBQSxHQUFBO2VBQUEsU0FBQSxHQUFBO0FBQ1YsVUFBQSxLQUFDLENBQUEsV0FBRCxDQUFhLGVBQWIsQ0FBNkIsQ0FBQyxRQUE5QixDQUF1QyxjQUF2QyxDQUFBLENBQUE7aUJBQ0EsS0FBQyxDQUFBLElBQUQsQ0FBTSxNQUFOLENBQWEsQ0FBQyxHQUFkLENBQWtCO0FBQUEsWUFBQSxPQUFBLEVBQVMsT0FBVDtXQUFsQixFQUZVO1FBQUEsRUFBQTtNQUFBLENBQUEsQ0FBQSxDQUFBLElBQUEsQ0FUWixDQUFBO0FBQUEsTUFZQSxJQUFDLENBQUEsTUFBRCxDQUFBLENBWkEsQ0FBQTtBQWFBLGNBQU8sSUFBQyxDQUFBLEtBQUssQ0FBQyxJQUFkO0FBQUEsYUFDTyxNQURQO0FBRUksVUFBQSxTQUFBLENBQUEsQ0FBQSxDQUFBO2lCQUNBLElBQUksQ0FBQyxTQUFTLENBQUMsWUFBZixDQUE4QjtBQUFBLFlBQUEsSUFBQSxFQUFNLElBQU47V0FBOUIsRUFISjtBQUFBLGFBSU8sT0FKUDtBQUtJLFVBQUEsU0FBQSxDQUFBLENBQUEsQ0FBQTtpQkFDQSxJQUFJLENBQUMsU0FBUyxDQUFDLGFBQWYsQ0FBOEI7QUFBQSxZQUFBLElBQUEsRUFBTSxJQUFOO1dBQTlCLEVBTko7QUFBQSxhQU9PLFFBUFA7QUFRSSxVQUFBLFFBQUEsQ0FBQSxDQUFBLENBQUE7aUJBQ0EsSUFBSSxDQUFDLFNBQVMsQ0FBQyxjQUFmLENBQThCO0FBQUEsWUFBQSxJQUFBLEVBQU0sSUFBTjtXQUE5QixFQVRKO0FBQUE7QUFXSSxVQUFBLFFBQUEsQ0FBQSxDQUFBLENBQUE7aUJBQ0EsSUFBSSxDQUFDLFNBQVMsQ0FBQyxXQUFmLENBQThCO0FBQUEsWUFBQSxJQUFBLEVBQU0sSUFBTjtXQUE5QixFQVpKO0FBQUEsT0FkVTtJQUFBLENBaEVaLENBQUE7O0FBQUEsMEJBNEZBLE9BQUEsR0FBUyxTQUFDLENBQUQsR0FBQTthQUFPLENBQUEsQ0FBRSxDQUFDLENBQUMsTUFBSixDQUFXLENBQUMsT0FBWixDQUFvQixNQUFwQixFQUFQO0lBQUEsQ0E1RlQsQ0FBQTs7QUFBQSwwQkE4RkEsTUFBQSxHQUFRLFNBQUMsS0FBRCxFQUFRLEdBQVIsRUFBYSxNQUFiLEdBQUE7QUFDTixVQUFBLG9CQUFBO0FBQUEsTUFBQSxJQUFDLENBQUEsV0FBRCxDQUFBLENBQUEsQ0FBQTtBQUNBLE1BQUEsSUFBRyxNQUFIO0FBQ0UsUUFBQSxRQUFBLEdBQVcsSUFBWCxDQUFBO0FBQUEsUUFDQSxJQUFDLENBQUEsSUFBRCxDQUFNLE1BQU4sQ0FBYSxDQUFDLElBQWQsQ0FBbUIsU0FBQSxHQUFBO0FBQ2pCLGNBQUEsSUFBQTtBQUFBLFVBQUEsSUFBQSxHQUFPLENBQUEsQ0FBRSxJQUFGLENBQVAsQ0FBQTtBQUNBLFVBQUEsSUFBRyxJQUFJLENBQUMsSUFBTCxDQUFVLFVBQVYsQ0FBQSxLQUF5QixHQUE1QjtBQUNFLFlBQUEsUUFBQSxHQUFXLElBQUksQ0FBQyxJQUFMLENBQUEsQ0FBWCxDQUFBO0FBQUEsWUFDQSxJQUFJLENBQUMsT0FBTCxDQUNFO0FBQUEsY0FBQSxPQUFBLEVBQVMsMEJBQVQ7QUFBQSxjQUNBLGVBQUEsRUFBaUIsZUFBQSxHQUFrQixHQUFsQixHQUF3QixJQUF4QixHQUNDLDZCQURELEdBQ2lDLFFBRGpDLEdBQzRDLElBRjdEO0FBQUEsY0FHQSxPQUFBLEVBQVMsQ0FBQyxJQUFELENBSFQ7YUFERixDQURBLENBQUE7QUFNQSxtQkFBTyxLQUFQLENBUEY7V0FGaUI7UUFBQSxDQUFuQixDQURBLENBQUE7QUFXQSxRQUFBLElBQUcsZ0JBQUg7QUFBa0IsZ0JBQUEsQ0FBbEI7U0FaRjtPQURBO0FBQUEsTUFjQSxVQUFBLEdBQWEsRUFBQSxDQUFHLFNBQUEsR0FBQTtlQUNkLElBQUMsQ0FBQSxHQUFELENBQUs7QUFBQSxVQUFBLE9BQUEsRUFBTSw2Q0FBTjtTQUFMLEVBQTBELEtBQTFELEVBRGM7TUFBQSxDQUFILENBZGIsQ0FBQTtBQWdCQSxNQUFBLElBQUcsTUFBSDtBQUFlLFFBQUEsSUFBQyxDQUFBLE1BQU0sQ0FBQyxLQUFSLENBQWMsVUFBZCxDQUFBLENBQWY7T0FBQSxNQUFBO0FBQ0ssUUFBQSxJQUFDLENBQUEsTUFBRCxDQUFRLFVBQVIsQ0FBQSxDQURMO09BaEJBO0FBQUEsTUFrQkEsSUFBQyxDQUFBLFVBQUQsQ0FBWSxJQUFaLEVBQWtCLElBQWxCLENBbEJBLENBQUE7QUFBQSxNQW1CQSxVQUFVLENBQUMsSUFBWCxDQUFnQixVQUFoQixFQUE0QixHQUE1QixDQW5CQSxDQUFBO0FBb0JBLE1BQUEsSUFBRyxNQUFIO0FBQ0UsUUFBQSxJQUFDLENBQUEsS0FBSyxDQUFDLE9BQU8sQ0FBQyxPQUFmLENBQXVCLENBQUMsS0FBRCxFQUFRLEdBQVIsQ0FBdkIsQ0FBQSxDQUFBO2VBQ0EsSUFBQyxDQUFBLFNBQUQsQ0FBQSxFQUZGO09BckJNO0lBQUEsQ0E5RlIsQ0FBQTs7QUFBQSwwQkF1SEEsU0FBQSxHQUFXLFNBQUEsR0FBQTtBQUNULFVBQUEsa0JBQUE7QUFBQSxNQUFBLElBQUcsQ0FBQyxHQUFBLEdBQU0sTUFBQSxxR0FBMkMsQ0FBRSwyQkFBcEQsQ0FBSDtBQUNFLFFBQUEsSUFBRyxDQUFBLGVBQW1CLENBQUMsSUFBaEIsQ0FBcUIsR0FBckIsQ0FBUDtBQUNFLFVBQUEsR0FBQSxHQUFNLFNBQUEsR0FBWSxHQUFsQixDQURGO1NBQUE7ZUFFQSxJQUFDLENBQUEsTUFBRCxDQUFRLEdBQVIsRUFBYSxHQUFiLEVBQWtCLElBQWxCLEVBSEY7T0FEUztJQUFBLENBdkhYLENBQUE7O0FBQUEsMEJBNkhBLFlBQUEsR0FBYyxTQUFDLENBQUQsR0FBQTtBQUNaLFVBQUEsSUFBQTtBQUFBLE1BQUEsSUFBRyxJQUFDLENBQUEsYUFBRCxJQUFtQixJQUFDLENBQUEsYUFBYyxDQUFBLENBQUEsQ0FBZixLQUFxQixDQUFDLENBQUMsTUFBN0M7QUFDRSxjQUFBLENBREY7T0FBQTtBQUFBLE1BRUEsSUFBQyxDQUFBLFlBQUQsQ0FBQSxDQUZBLENBQUE7QUFBQSxNQUdBLElBQUMsQ0FBQSxXQUFELENBQUEsQ0FIQSxDQUFBO0FBQUEsTUFJQSxJQUFBLEdBQU8sSUFBQyxDQUFBLE9BQUQsQ0FBUyxDQUFULENBSlAsQ0FBQTtBQUFBLE1BS0EsSUFBSSxDQUFDLElBQUwsQ0FBVTtBQUFBLFFBQUEsZUFBQSxFQUFpQixJQUFqQjtPQUFWLENBTEEsQ0FBQTtBQUFBLE1BTUEsSUFBSSxDQUFDLEdBQUwsQ0FBUztBQUFBLFFBQUEsTUFBQSxFQUFRLE1BQVI7T0FBVCxDQU5BLENBQUE7YUFPQSxJQUFDLENBQUEsYUFBRCxHQUFpQixLQVJMO0lBQUEsQ0E3SGQsQ0FBQTs7QUFBQSwwQkF1SUEsV0FBQSxHQUFhLFNBQUEsR0FBQTtBQUNYLE1BQUEsSUFBRyxDQUFBLElBQUssQ0FBQSxhQUFSO0FBQTJCLGNBQUEsQ0FBM0I7T0FBQTtBQUFBLE1BQ0EsSUFBQyxDQUFBLGFBQWEsQ0FBQyxHQUFmLENBQW1CO0FBQUEsUUFBQSxNQUFBLEVBQVEsU0FBUjtPQUFuQixDQURBLENBQUE7QUFBQSxNQUVBLElBQUMsQ0FBQSxhQUFhLENBQUMsSUFBZixDQUFvQjtBQUFBLFFBQUEsZUFBQSxFQUFpQixLQUFqQjtPQUFwQixDQUZBLENBQUE7QUFBQSxNQUdBLElBQUMsQ0FBQSxLQUFLLENBQUMsT0FBUSxDQUFBLElBQUMsQ0FBQSxhQUFhLENBQUMsS0FBZixDQUFBLENBQUEsR0FBdUIsQ0FBdkIsQ0FBMEIsQ0FBQSxDQUFBLENBQXpDLEdBQThDLElBQUMsQ0FBQSxhQUFhLENBQUMsSUFBZixDQUFBLENBSDlDLENBQUE7QUFBQSxNQUlBLElBQUMsQ0FBQSxTQUFELENBQUEsQ0FKQSxDQUFBO2FBS0EsSUFBQyxDQUFBLGFBQUQsR0FBaUIsS0FOTjtJQUFBLENBdkliLENBQUE7O0FBQUEsMEJBK0lBLFVBQUEsR0FBWSxTQUFDLENBQUQsR0FBQTtBQUNWLFVBQUEseUJBQUE7QUFBQSxNQUFBLElBQUcsSUFBQyxDQUFBLGFBQUQsSUFBbUIsSUFBQyxDQUFBLGFBQWMsQ0FBQSxDQUFBLENBQWYsS0FBdUIsQ0FBQyxDQUFDLE1BQS9DO0FBQTJELFFBQUEsSUFBQyxDQUFBLFdBQUQsQ0FBQSxDQUFBLENBQTNEO09BQUE7QUFBQSxNQUNBLElBQUEsR0FBTyxJQUFDLENBQUEsT0FBRCxDQUFTLENBQVQsQ0FBVyxDQUFDLElBQVosQ0FBaUIsVUFBakIsQ0FEUCxDQUFBO0FBRUEsTUFBQSxJQUFHLHNCQUFzQixDQUFDLElBQXZCLENBQTRCLElBQTVCLENBQUg7QUFDRSxRQUFBLE9BQUEsR0FDRSxDQUFJLElBQUksQ0FBQyxNQUFNLENBQUMsR0FBWixDQUFnQiw4QkFBaEIsQ0FBSCxHQUF1RDtBQUFBLFVBQUEsS0FBQSxFQUFNLE9BQU47U0FBdkQsR0FBMEUsRUFBM0UsQ0FERixDQUFBO2VBRUEsSUFBSSxDQUFDLFNBQVMsQ0FBQyxJQUFmLENBQW9CLElBQUksQ0FBQyxPQUFMLENBQWEsWUFBYixFQUEyQixFQUEzQixDQUFwQixFQUFvRCxPQUFwRCxFQUhGO09BQUEsTUFBQTtBQUtFLFFBQUEsR0FBQSxrRUFBMkMsSUFBSSxDQUFDLFNBQWhELENBQUE7ZUFDQSxJQUFJLENBQUMsUUFBUSxDQUFDLFFBQWQsQ0FBdUIsSUFBSSxDQUFDLEtBQUssQ0FBQyxPQUFYLENBQW1CLEdBQW5CLENBQXZCLEVBQWdELElBQWhELEVBTkY7T0FIVTtJQUFBLENBL0laLENBQUE7O0FBQUEsMEJBMEpBLFFBQUEsR0FBVSxTQUFDLENBQUQsR0FBQTtBQUNSLFVBQUEsS0FBQTtBQUFBLE1BQUEsSUFBRyxDQUFDLENBQUMsT0FBRixJQUFhLENBQUMsQ0FBQyxNQUFsQjtBQUE4QixRQUFBLElBQUMsQ0FBQSxZQUFELENBQWMsQ0FBZCxDQUFBLENBQUE7QUFBaUIsY0FBQSxDQUEvQztPQUFBO0FBQ0EsTUFBQSxJQUFHLENBQUMsQ0FBQyxNQUFGLGtEQUE0QixDQUFBLENBQUEsV0FBL0I7QUFBdUMsY0FBQSxDQUF2QztPQURBO2FBRUEsSUFBQyxDQUFBLFVBQUQsQ0FBWSxDQUFaLEVBSFE7SUFBQSxDQTFKVixDQUFBOztBQUFBLDBCQStKQSxVQUFBLEdBQVksU0FBQyxDQUFELEdBQUE7QUFDVixVQUFBLEtBQUE7QUFBQSxNQUFBLGFBQUcsQ0FBQyxDQUFDLE1BQUYsS0FBWSxDQUFaLElBQUEsS0FBQSxLQUFlLEVBQWxCO0FBQ0UsUUFBQSxJQUFDLENBQUEsV0FBRCxDQUFBLENBQUEsQ0FBQTtlQUNBLE1BRkY7T0FEVTtJQUFBLENBL0paLENBQUE7O0FBQUEsMEJBb0tBLG9CQUFBLEdBQXNCLFNBQUMsQ0FBRCxHQUFBO0FBQ3BCLE1BQUEsSUFBQyxDQUFBLFVBQUQsR0FBZSxDQUFDLENBQUMsS0FBakIsQ0FBQTtBQUFBLE1BQ0EsSUFBQyxDQUFBLFVBQUQsR0FBZSxDQUFDLENBQUMsS0FEakIsQ0FBQTtBQUFBLE1BRUEsSUFBQyxDQUFBLGVBQUQsR0FBbUIsSUFGbkIsQ0FBQTthQUdBLElBQUMsQ0FBQSxNQUFNLENBQUMsUUFBUixDQUFpQixVQUFqQixFQUpvQjtJQUFBLENBcEt0QixDQUFBOztBQUFBLDBCQTBLQSxhQUFBLEdBQWUsU0FBQyxDQUFELEdBQUE7QUFDYixVQUFBLGdGQUFBO0FBQUEsTUFBQSxLQUFBLEdBQVMsQ0FBQyxDQUFDLEtBQUYsR0FBVSxJQUFDLENBQUEsVUFBcEIsQ0FBQTtBQUFBLE1BQ0EsS0FBQSxHQUFTLENBQUMsQ0FBQyxLQUFGLEdBQVUsSUFBQyxDQUFBLFVBRHBCLENBQUE7QUFBQSxNQUVBLE1BQUEsR0FBUyxLQUFBLEdBQU0sS0FBTixHQUFjLEtBQUEsR0FBTSxLQUY3QixDQUFBO0FBQUEsTUFHQSxLQUFBLEdBQVEsSUFBQyxDQUFBLFVBQVUsQ0FBQyxLQUFaLENBQUEsQ0FBQSxHQUF1QixDQUgvQixDQUFBO0FBQUEsTUFJQSxLQUFBLEdBQVEsSUFBQyxDQUFBLFVBQVUsQ0FBQyxNQUFaLENBQUEsQ0FBQSxHQUF1QixDQUovQixDQUFBO0FBQUEsTUFLQSxXQUFBLEdBQWUsQ0FBQSxLQUFBLFlBQVEsQ0FBQyxDQUFDLE1BQVYsU0FBQSxHQUFrQixLQUFBLEdBQU0sQ0FBeEIsQ0FMZixDQUFBO0FBQUEsTUFNQSxXQUFBLEdBQWUsQ0FBQSxLQUFBLFlBQVEsQ0FBQyxDQUFDLE1BQVYsU0FBQSxHQUFrQixLQUFBLEdBQU0sQ0FBeEIsQ0FOZixDQUFBO0FBQUEsTUFPQSxJQUFBO0FBQU8sZ0JBQUEsS0FBQTtBQUFBLGlCQUNBLE1BQUEsR0FBUyxLQURUO21CQUN1QyxJQUFDLENBQUEsS0FBSyxDQUFDLEtBRDlDO0FBQUEsaUJBRUEsV0FBQSxJQUFnQixDQUFDLENBQUMsS0FBRixHQUFVLE1BRjFCO21CQUV1QyxNQUZ2QztBQUFBLGlCQUdBLFdBQUEsSUFBZ0IsQ0FBQyxDQUFDLEtBQUYsR0FBVSxLQUFBLEdBQU0sRUFIaEM7bUJBR3VDLFFBSHZDO0FBQUEsaUJBSUEsV0FBQSxJQUFnQixDQUFDLENBQUMsS0FBRixHQUFVLEtBQUEsR0FBTSxFQUpoQzttQkFJdUMsU0FKdkM7QUFBQSxpQkFLQSxXQUFBLElBQWdCLENBQUMsQ0FBQyxLQUFGLEdBQVUsTUFMMUI7bUJBS3VDLE9BTHZDO0FBQUE7bUJBUFAsQ0FBQTthQWNBLElBQUMsQ0FBQSxVQUFELENBQVksSUFBWixFQWZhO0lBQUEsQ0ExS2YsQ0FBQTs7QUFBQSwwQkEyTEEsYUFBQSxHQUFlLFNBQUMsQ0FBRCxHQUFBO0FBQ2IsVUFBQSxJQUFBO0FBQUEsTUFBQSxJQUFBLEdBQU8sSUFBQyxDQUFBLE9BQUQsQ0FBUyxDQUFULENBQVAsQ0FBQTtBQUFBLE1BQ0EsSUFBQyxDQUFBLFVBQUQsR0FBZSxDQUFDLENBQUMsS0FEakIsQ0FBQTtBQUFBLE1BRUEsSUFBQyxDQUFBLFVBQUQsR0FBZSxDQUFDLENBQUMsS0FGakIsQ0FBQTtBQUFBLE1BR0EsSUFBQyxDQUFBLFdBQUQsR0FBZSxJQUhmLENBQUE7QUFBQSxNQUlBLElBQUMsQ0FBQSxlQUFELEdBQW1CLElBQUksQ0FBQyxLQUFMLENBQUEsQ0FBQSxHQUFhLENBSmhDLENBQUE7YUFLQSxJQUFDLENBQUEsV0FBVyxDQUFDLFFBQWIsQ0FBc0IsVUFBdEIsRUFOYTtJQUFBLENBM0xmLENBQUE7O0FBQUEsMEJBbU1BLFlBQUEsR0FBYyxTQUFDLEdBQUQsR0FBQTtBQUNaLE1BQUEsSUFBQyxDQUFBLGVBQUQsR0FBbUIsS0FBbkIsQ0FBQTtBQUFBLE1BQ0EsSUFBQyxDQUFBLE1BQU0sQ0FBQyxXQUFSLENBQW9CLFVBQXBCLENBREEsQ0FBQTtBQUVBLE1BQUEsSUFBRyxDQUFBLElBQUssQ0FBQSxXQUFSO0FBQXlCLGNBQUEsQ0FBekI7T0FGQTtBQUdBLE1BQUEsSUFBRyxHQUFIO0FBQ0UsUUFBQSxJQUFDLENBQUEsS0FBSyxDQUFDLE9BQU8sQ0FBQyxNQUFmLENBQXNCLElBQUMsQ0FBQSxXQUFXLENBQUMsS0FBYixDQUFBLENBQUEsR0FBcUIsQ0FBM0MsRUFBOEMsQ0FBOUMsQ0FBQSxDQUFBO0FBQUEsUUFDQSxJQUFDLENBQUEsV0FBVyxDQUFDLE1BQWIsQ0FBQSxDQURBLENBQUE7QUFBQSxRQUVBLElBQUMsQ0FBQSxTQUFELENBQUEsQ0FGQSxDQURGO09BQUEsTUFBQTtBQUlLLFFBQUEsSUFBQyxDQUFBLFdBQVcsQ0FBQyxXQUFiLENBQXlCLFVBQXpCLENBQUEsQ0FKTDtPQUhBO0FBQUEsTUFRQSxJQUFDLENBQUEsV0FBRCxHQUFlLElBUmYsQ0FBQTthQVNBLE1BVlk7SUFBQSxDQW5NZCxDQUFBOztBQUFBLDBCQStNQSxlQUFBLEdBQWlCLFNBQUMsQ0FBRCxHQUFBO0FBQ2YsTUFBQSxJQUFHLElBQUMsQ0FBQSxhQUFKO0FBQXVCLFFBQUEsSUFBQyxDQUFBLFdBQUQsQ0FBQSxDQUFBLENBQXZCO09BQUE7QUFBQSxNQUNBLElBQUMsQ0FBQSxvQkFBRCxDQUFzQixDQUF0QixDQURBLENBQUE7YUFFQSxNQUhlO0lBQUEsQ0EvTWpCLENBQUE7O0FBQUEsMEJBb05BLFlBQUEsR0FBYyxTQUFDLENBQUQsR0FBQTtBQUNaLE1BQUEsSUFBRyxJQUFDLENBQUEsYUFBRCxJQUFrQixDQUFDLENBQUMsT0FBdkI7QUFBb0MsY0FBQSxDQUFwQztPQUFBO0FBRUEsTUFBQSxJQUFHLElBQUMsQ0FBQSxhQUFKO0FBQXVCLGNBQUEsQ0FBdkI7T0FGQTtBQUFBLE1BR0EsSUFBQyxDQUFBLGFBQUQsQ0FBZSxDQUFmLENBSEEsQ0FBQTthQUlBLE1BTFk7SUFBQSxDQXBOZCxDQUFBOztBQUFBLDBCQTJOQSxTQUFBLEdBQVcsU0FBQyxJQUFELEVBQU8sUUFBUCxFQUFpQixHQUFqQixFQUFzQixPQUF0QixHQUFBO0FBQ1QsTUFBQSxJQUFHLENBQUEsQ0FBSyxDQUFBLFFBQUEsR0FBVyxFQUFYLEdBQWdCLE9BQWhCLElBQWdCLE9BQWhCLEdBQTBCLFFBQUEsR0FBVyxFQUFyQyxDQUFELENBQVA7QUFDRSxRQUFBLElBQUMsQ0FBQSxZQUFELENBQWMsSUFBZCxDQUFBLENBQUE7ZUFDQSxLQUZGO09BRFM7SUFBQSxDQTNOWCxDQUFBOztBQUFBLDBCQWdPQSxZQUFBLEdBQWMsU0FBQyxJQUFELEVBQU8sUUFBUCxFQUFpQixHQUFqQixFQUFzQixPQUF0QixHQUFBO0FBQ1osVUFBQSx5RUFBQTtBQUFBLE1BQUEsR0FBQSxHQUFPLEdBQUEsR0FBTSxJQUFiLENBQUE7QUFBQSxNQUNBLElBQUEsR0FBTyxJQUFJLENBQUMsS0FBTCxDQUFXLElBQUksQ0FBQyxHQUFMLENBQVMsR0FBVCxDQUFBLEdBQ0EsVUFBSSxJQUFDLENBQUEsS0FBSyxDQUFDLEtBQVAsS0FBZ0IsTUFBaEIsSUFBQSxLQUFBLEtBQXdCLE9BQTNCLEdBQXlDLENBQXpDLEdBQWdELEVBQWpELENBRFgsQ0FEUCxDQUFBO0FBR0EsTUFBQSxJQUFHLElBQUEsR0FBTyxDQUFWO0FBQWlCLGNBQUEsQ0FBakI7T0FIQTtBQUFBLE1BSUEsSUFBQSxJQUFRLENBSlIsQ0FBQTtBQUFBLE1BS0EsT0FBQSxHQUFVLElBQUMsQ0FBQSxLQUFLLENBQUMsT0FBTyxDQUFDLE1BTHpCLENBQUE7QUFBQSxNQU1BLE1BQUEsR0FBUyxJQUFDLENBQUEsZUFBRCxHQUFtQixDQUFJLEdBQUEsR0FBTSxDQUFULEdBQWdCLENBQUEsSUFBaEIsR0FBMkIsSUFBNUIsQ0FONUIsQ0FBQTtBQUFBLE1BT0EsTUFBQSxHQUFTLElBQUksQ0FBQyxHQUFMLENBQVMsQ0FBVCxFQUFZLElBQUksQ0FBQyxHQUFMLENBQVMsT0FBQSxHQUFRLENBQWpCLEVBQW9CLE1BQXBCLENBQVosQ0FQVCxDQUFBO0FBQUEsTUFRQSxNQUFBLEdBQVMsSUFBQyxDQUFBLFdBQVcsQ0FBQyxLQUFiLENBQUEsQ0FBQSxHQUFxQixDQVI5QixDQUFBO0FBU0EsTUFBQSxJQUFHLE1BQUEsS0FBVSxNQUFiO0FBQXlCLGNBQUEsQ0FBekI7T0FUQTtBQUFBLE1BVUEsS0FBQSxHQUFRLElBQUMsQ0FBQSxJQUFELENBQU0sTUFBTixDQUFhLENBQUMsTUFBZCxDQUFBLENBVlIsQ0FBQTtBQUFBLE1BV0EsTUFBQSxHQUFTLE1BQUEsR0FBUyxDQVhsQixDQUFBO0FBWUEsYUFBTSxNQUFBLEdBQVMsT0FBZixHQUFBO0FBQ0UsZ0JBQUEsS0FBQTtBQUFBLGVBQ08sTUFBQSxLQUFZLE1BRG5CO0FBQytCLFlBQUEsSUFBQyxDQUFBLE1BQUQsQ0FBUSxLQUFLLENBQUMsRUFBTixDQUFTLE1BQVQsQ0FBUixDQUFBLENBQUE7QUFBQSxZQUEyQixNQUFBLEVBQTNCLENBRC9CO0FBQ087QUFEUCxlQUVPLE1BQUEsS0FBWSxNQUZuQjtBQUUrQixZQUFBLElBQUMsQ0FBQSxNQUFELENBQVEsS0FBSyxDQUFDLEVBQU4sQ0FBUyxNQUFBLEVBQVQsQ0FBUixDQUFBLENBQUE7QUFBQSxZQUEyQixNQUFBLEVBQTNCLENBRi9CO0FBRU87QUFGUDtBQUdPLFlBQUEsTUFBQSxFQUFBLENBSFA7QUFBQSxTQURGO01BQUEsQ0FaQTtBQUFBLE1BaUJBLE9BQUEsR0FBVSxJQUFDLENBQUEsS0FBSyxDQUFDLE9BQVAsR0FBaUIsRUFqQjNCLENBQUE7QUFBQSxNQWtCQSxJQUFDLENBQUEsSUFBRCxDQUFNLE1BQU4sQ0FBYSxDQUFDLElBQWQsQ0FBbUIsU0FBQSxHQUFBO0FBQ2pCLFlBQUEsSUFBQTtBQUFBLFFBQUEsSUFBQSxHQUFPLENBQUEsQ0FBRSxJQUFGLENBQVAsQ0FBQTtlQUNBLE9BQU8sQ0FBQyxJQUFSLENBQWEsQ0FBQyxJQUFJLENBQUMsSUFBTCxDQUFBLENBQUQsRUFBYyxJQUFJLENBQUMsSUFBTCxDQUFVLFVBQVYsQ0FBZCxDQUFiLEVBRmlCO01BQUEsQ0FBbkIsQ0FsQkEsQ0FBQTthQXFCQSxJQUFDLENBQUEsU0FBRCxDQUFBLEVBdEJZO0lBQUEsQ0FoT2QsQ0FBQTs7QUFBQSwwQkF3UEEsU0FBQSxHQUFXLFNBQUMsQ0FBRCxHQUFBO0FBQ1QsVUFBQSxhQUFBO0FBQUEsTUFBQSxJQUFHLENBQUEsSUFBSyxDQUFBLFdBQUwsSUFBcUIsQ0FBQSxJQUFLLENBQUEsZUFBN0I7QUFBa0QsY0FBQSxDQUFsRDtPQUFBO0FBQ0EsTUFBQSxJQUFHLElBQUMsQ0FBQSxhQUFELElBQWtCLENBQUMsQ0FBQyxDQUFDLEtBQUYsR0FBVSxDQUFYLENBQUEsS0FBaUIsQ0FBdEM7QUFBNkMsUUFBQSxJQUFDLENBQUEsWUFBRCxDQUFBLENBQUEsQ0FBQTtBQUFpQixjQUFBLENBQTlEO09BREE7QUFFQSxNQUFBLElBQUcsSUFBQyxDQUFBLGVBQUo7QUFBeUIsUUFBQSxJQUFDLENBQUEsYUFBRCxDQUFlLENBQWYsQ0FBQSxDQUF6QjtPQUFBLE1BQUE7QUFFRSxRQUFBLE1BQUEsR0FDRSxVQUFJLElBQUMsQ0FBQSxLQUFLLENBQUMsS0FBUCxLQUFnQixLQUFoQixJQUFBLEtBQUEsS0FBdUIsUUFBMUIsR0FDSSxDQUFDLElBQUMsQ0FBQSxVQUFGLEVBQWMsSUFBQyxDQUFBLFVBQWYsRUFBMkIsQ0FBQyxDQUFDLEtBQTdCLEVBQW9DLENBQUMsQ0FBQyxLQUF0QyxDQURKLEdBRUksQ0FBQyxJQUFDLENBQUEsVUFBRixFQUFjLElBQUMsQ0FBQSxVQUFmLEVBQTJCLENBQUMsQ0FBQyxLQUE3QixFQUFvQyxDQUFDLENBQUMsS0FBdEMsQ0FGTCxDQURGLENBQUE7QUFJQSxRQUFBLElBQUcsQ0FBQSxJQUFLLENBQUEsU0FBRCxhQUFXLE1BQVgsQ0FBUDtBQUNFLFVBQUEsSUFBQyxDQUFBLFlBQUQsYUFBYyxNQUFkLENBQUEsQ0FERjtTQU5GO09BRkE7YUFVQSxNQVhTO0lBQUEsQ0F4UFgsQ0FBQTs7QUFBQSwwQkFxUUEsY0FBQSxHQUFnQixTQUFBLEdBQUE7QUFDZCxVQUFBLEtBQUE7QUFBQSxNQUFBLEtBQUEsR0FBUSxDQUFBLENBQUUsTUFBRixDQUFSLENBQUE7QUFBQSxNQUNBLElBQUMsQ0FBQSxJQUFJLENBQUMsR0FBTixDQUFVLEtBQVYsRUFBaUIsbUJBQWpCLEVBQThDLENBQUEsU0FBQSxLQUFBLEdBQUE7ZUFBQSxTQUFBLEdBQUE7aUJBQUcsS0FBQyxDQUFBLFdBQUQsQ0FBQSxFQUFIO1FBQUEsRUFBQTtNQUFBLENBQUEsQ0FBQSxDQUFBLElBQUEsQ0FBOUMsQ0FEQSxDQUFBO0FBQUEsTUFFQSxJQUFDLENBQUEsSUFBSSxDQUFDLEdBQU4sQ0FBVSxLQUFWLEVBQWlCLFNBQWpCLEVBQThDLENBQUEsU0FBQSxLQUFBLEdBQUE7ZUFBQSxTQUFBLEdBQUE7aUJBQUcsS0FBQyxDQUFBLFlBQUQsQ0FBQSxFQUFIO1FBQUEsRUFBQTtNQUFBLENBQUEsQ0FBQSxDQUFBLElBQUEsQ0FBOUMsQ0FGQSxDQUFBO0FBQUEsTUFHQSxJQUFDLENBQUEsSUFBSSxDQUFDLEdBQU4sQ0FBVSxLQUFWLEVBQWlCLFdBQWpCLEVBQTBDLENBQUEsU0FBQSxLQUFBLEdBQUE7ZUFBQSxTQUFDLENBQUQsR0FBQTtpQkFBTyxLQUFDLENBQUEsU0FBRCxDQUFpQixDQUFqQixFQUFQO1FBQUEsRUFBQTtNQUFBLENBQUEsQ0FBQSxDQUFBLElBQUEsQ0FBMUMsQ0FIQSxDQUFBO0FBQUEsTUFJQSxJQUFDLENBQUEsSUFBSSxDQUFDLEdBQU4sQ0FBVSxJQUFWLEVBQWlCLFdBQWpCLEVBQThCLFVBQTlCLEVBQTBDLENBQUEsU0FBQSxLQUFBLEdBQUE7ZUFBQSxTQUFDLENBQUQsR0FBQTtpQkFBTyxLQUFDLENBQUEsZUFBRCxDQUFpQixDQUFqQixFQUFQO1FBQUEsRUFBQTtNQUFBLENBQUEsQ0FBQSxDQUFBLElBQUEsQ0FBMUMsQ0FKQSxDQUFBO0FBQUEsTUFLQSxJQUFDLENBQUEsSUFBSSxDQUFDLEdBQU4sQ0FBVSxJQUFWLEVBQWlCLFdBQWpCLEVBQThCLE1BQTlCLEVBQTBDLENBQUEsU0FBQSxLQUFBLEdBQUE7ZUFBQSxTQUFDLENBQUQsR0FBQTtpQkFBTyxLQUFDLENBQUEsWUFBRCxDQUFpQixDQUFqQixFQUFQO1FBQUEsRUFBQTtNQUFBLENBQUEsQ0FBQSxDQUFBLElBQUEsQ0FBMUMsQ0FMQSxDQUFBO0FBQUEsTUFNQSxJQUFDLENBQUEsSUFBSSxDQUFDLEdBQU4sQ0FBVSxJQUFWLEVBQWlCLFNBQWpCLEVBQThCLE1BQTlCLEVBQTBDLENBQUEsU0FBQSxLQUFBLEdBQUE7ZUFBQSxTQUFDLENBQUQsR0FBQTtpQkFBTyxLQUFDLENBQUEsVUFBRCxDQUFpQixDQUFqQixFQUFQO1FBQUEsRUFBQTtNQUFBLENBQUEsQ0FBQSxDQUFBLElBQUEsQ0FBMUMsQ0FOQSxDQUFBO2FBT0EsSUFBQyxDQUFBLElBQUksQ0FBQyxHQUFOLENBQVUsSUFBVixFQUFpQixPQUFqQixFQUE4QixNQUE5QixFQUEwQyxDQUFBLFNBQUEsS0FBQSxHQUFBO2VBQUEsU0FBQyxDQUFELEdBQUE7aUJBQU8sS0FBQyxDQUFBLFFBQUQsQ0FBaUIsQ0FBakIsRUFBUDtRQUFBLEVBQUE7TUFBQSxDQUFBLENBQUEsQ0FBQSxJQUFBLENBQTFDLEVBUmM7SUFBQSxDQXJRaEIsQ0FBQTs7QUFBQSwwQkErUUEsT0FBQSxHQUFTLFNBQUEsR0FBQTtBQUNQLE1BQUEsSUFBQyxDQUFBLElBQUksQ0FBQyxPQUFOLENBQUEsQ0FBQSxDQUFBO2FBQ0EsSUFBQyxDQUFBLE1BQUQsQ0FBQSxFQUZPO0lBQUEsQ0EvUVQsQ0FBQTs7dUJBQUE7O0tBRndCLEtBUjFCLENBQUE7QUFBQSIKfQ==
+
+//# sourceURL=/Users/james/.atom/packages/command-toolbar/lib/toolbar-view.coffee
