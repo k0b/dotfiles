@@ -1,7 +1,8 @@
 https://lukesmith.xyz/rss.xml
-https://notrelated.libsyn.com/rss
+# https://notrelated.xyz/rss
 https://www.youtube.com/feeds/videos.xml?channel_id=UC2eYFnH61tmytImy1mTYvhA "~Luke Smith (YouTube)"
-https://www.archlinux.org/feeds/news/ "tech"
+# https://www.archlinux.org/feeds/news/ "tech"
+https://devzen.ru/feed/ "tech,russian"
 
 
 https://www.youtube.com/feeds/videos.xml?channel_id=UCpwQ3deqRxm1e2tM6pMZF4A "yt"
@@ -36,3 +37,8 @@ https://www.youtube.com/feeds/videos.xml?channel_id=UC6xBhF4QYIPPF2_-ExZzd2w "yt
 https://www.youtube.com/feeds/videos.xml?channel_id=UCiDJtJKMICpb9B1qf7qjEOA "yt,tech"
 https://www.youtube.com/feeds/videos.xml?channel_id=UCx-dJoP9hFCBloY9qodykvw "yt,history"
 https://www.youtube.com/feeds/videos.xml?channel_id=UC95m7aBYo7wgNCoHb1ojQYw "yt,nature"
+https://www.youtube.com/feeds/videos.xml?channel_id=UC7yMBOeBTcPhlTdI-PS-_Xg "yt,science,russian"
+https://www.youtube.com/feeds/videos.xml?channel_id=UCfXdqvG2xqwfImyGlszu9UQ "yt,tech,devops,dataops"
+https://www.youtube.com/feeds/videos.xml?channel_id=UCMyB-WysOQpVF91s8s55szQ "yt"
+https://www.youtube.com/feeds/videos.xml?channel_id=UCH6yQ87Z0fH04llJQR3N98w "yt"
+https://www.youtube.com/feeds/videos.xml?channel_id=UCMSBHWrhN57snV3f1VGlAzw "yt"
